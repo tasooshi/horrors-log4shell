@@ -43,11 +43,9 @@ This daemon collects data incoming from exploited machines and logs into a JSON 
 
 ## Step 4: Executing the attack:
 
-Opens up several ports that get proxied to a single JNDI handler (`class JNDI(SocketService)`):
+Opens up several ports that get proxied to a single JNDI handler (`class JNDI(SocketService)`). Starts sending requests automatically:
 
     (.venv) $ ./attacker.py
-
-Now visit `http://127.0.0.1:80/send-requests` to launch the scenario.
 
 ## Check:
 
