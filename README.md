@@ -47,6 +47,8 @@ Opens up several ports that get proxied to a single JNDI handler (`class JNDI(So
 
     (.venv) $ ./attacker.py
 
+Visit `http://127.0.0.1:8889/send-requests` to resend the requests.
+
 ## Check:
 
 So, in the end you should have the following services running:
