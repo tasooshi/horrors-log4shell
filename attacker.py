@@ -51,6 +51,8 @@ class JNDI(services.Service):
             JNDI_RESPONSE.format(**self.scenario.context).encode('utf-8')
         )
         await writer.drain()
+        writer.write_eof()
+        writer.close()
 
 
 async def send_requests(scenario):
