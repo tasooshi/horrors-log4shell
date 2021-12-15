@@ -29,6 +29,8 @@ This is the payload that is going to be executed by the victim:
 
     $ javac Payload.java
 
+*JDK must be compatible with the vulnerable server. JDK 1.7.* is recommended.
+
 ## Step 2: Running the vulnerable application
 
 Listens on `8080` by default and exposes two paths: `/` and `/endpoint`:

