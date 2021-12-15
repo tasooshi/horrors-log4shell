@@ -29,7 +29,7 @@ This is the payload that is going to be executed by the victim:
 
     $ javac Payload.java
 
-*JDK used to compilation must be compatible with a vulnerable server. Recommended use JDK 1.7.*
+*JDK must be compatible with the vulnerable server. JDK 1.7.* is recommended.
 
 ## Step 2: Running the vulnerable application
 
