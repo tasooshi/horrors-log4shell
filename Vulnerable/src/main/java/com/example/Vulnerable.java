@@ -24,10 +24,14 @@ public class Vulnerable {
     }
 
     @RequestMapping("/endpoint")
-    String endpoint(@RequestHeader(name="User-Agent") String userAgent, @RequestParam(value="somefield", defaultValue="default") String somefield) {
-	logger.info("User-Agent:" + userAgent);
+    String endpoint(
+            @RequestHeader(name="User-Agent") String userAgent,
+            @RequestParam(value="somefield", defaultValue="default") String somefield,
+            @RequestParam(value="secondfield", defaultValue="default") String secondfield) {
+        logger.info("User-Agent:" + userAgent);
         logger.info("somefield:" + somefield);
-        return "<html><head><title>Vulnerable Application</title></head><body><form><input name=\"somefield\" type=\"text\"><button type=\"submit\">Submit</button></form></body></html>";
+        logger.info("secondfield:" + secondfield);
+        return "<html><head><title>Vulnerable Application</title></head><body><form method=\"POST\"><input name=\"somefield\" type=\"text\"><input name=\"secondfield\" type=\"text\"><button type=\"submit\">Submit</button></form></body></html>";
     }
 
     public static void main(String[] args) {

