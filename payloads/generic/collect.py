@@ -1,6 +1,4 @@
-import os
 import pathlib
-import shlex
 import subprocess
 import tempfile
 
@@ -18,8 +16,8 @@ class CompiledJavaPayload(templates.Template):
             tmp_bin = pathlib.Path(tmp_dir, 'Payload.class')
             with open(tmp_src, 'w') as fil:
                 fil.write(template)
-            cmd = self.config.COMPILER_JAVAC + ' ' + str(tmp_src)
-            subprocess.run(shlex.split(cmd))
+            compiler = pathlib.Path(self.config.COMPILER_JAVAC)
+            subprocess.run([compiler, tmp_src])
             print('Compiled ' + str(tmp_bin))
             with open(tmp_bin, 'rb') as fil:
                 template = fil.read()
