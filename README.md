@@ -19,10 +19,7 @@
 
 ### Framework used in examples
 
-    % git clone https://github.com/tasooshi/horrors.git; cd horrors
-    % python3 -m venv .venv
-    % source .venv/bin/activate
-    % python3 setup.py install
+    % pip3 install git+https://github.com/tasooshi/horrors
 
 ## Usage
 
