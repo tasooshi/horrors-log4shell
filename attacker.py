@@ -102,7 +102,7 @@ class JNDI(services.Service):
         for ldap_type in self.RESPONSE_LDAP.values():
             for key, val in ldap_type.items():
                 try:
-                    ldap_type[key] = string.Template(val).substitute(context)
+                    ldap_type[key] = string.Template(val).substitute(context)                
                 except KeyError:
                     pass
 
