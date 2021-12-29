@@ -17,9 +17,9 @@
     * JDK 8u121
 * Make sure to have compatible JDKs on both sides.
 
-### Framework used in examples
+### Python requirements
 
-    % pip3 install git+https://github.com/tasooshi/horrors
+    % pip3 install pyasn1 git+https://github.com/tasooshi/horrors
 
 ## Usage
 

