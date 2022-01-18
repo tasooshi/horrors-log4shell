@@ -138,7 +138,7 @@ class FuzzUri(scenarios.Scene):
             input_fields = BeautifulSoup(response['content'], 'html.parser').find_all('input')
             if input_fields:
                 data = {field.get('name'): payload for field in input_fields}
-                response = await self.http_post(target, data headers)
+                response = await self.http_post(target, data, headers)
                 logging.debug('Got HTTP response: ' + str(response))
 
 
