@@ -28,3 +28,5 @@ COLLECTOR_PORT = 8888
 
 PAYLOAD_CLS = 'payloads.generic.collect.Payload'
 COMPILER_JAVAC = '/usr/local/Cellar/openjdk@8/1.8.0+312/bin/javac'
+JAVA = '/usr/local/Cellar/openjdk@8/1.8.0+312/bin/java'
+YSOSERIAL = '/home/user/horrors-log4shell/ysoserial-0.0.6-SNAPSHOT-all.jar'

