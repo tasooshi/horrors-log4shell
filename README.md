@@ -20,7 +20,7 @@
 
 ### Python requirements
 
-    % pip3 install pyasn1 git+https://github.com/tasooshi/horrors
+    % pip3 install pyasn1 pyjnius git+https://github.com/tasooshi/horrors
 
 ## Usage
 
