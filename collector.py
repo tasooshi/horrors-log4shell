@@ -17,9 +17,12 @@ class HTTPCollector(services.HTTPCollector):
         body = dict(request.form)
         if body:
             doc['body'] = body
+        doc['payload'] = {}
+        doc['payload']['type'] = query.get('type')
         if bypass_id := query.get('bypass_id'):
             import attacker_config as config
-            doc['bypass'] = config.BYPASSES[int(bypass_id)]
+            doc['payload']['bypass'] = config.BYPASSES[int(bypass_id)]
+        doc['payload']['header'] = query.get('header')
         doc['url'] = request.url
         doc['headers'] = dict(request.headers)
         doc['socket'] = {'ip': request.socket[0], 'port': request.socket[1]}

