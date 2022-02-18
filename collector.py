@@ -6,6 +6,11 @@ from horrors import (
     services,
 )
 
+try:
+    import attacker_config as config
+except ImportError:
+    exit('Configuration file `attacker_config.py` not found!')
+
 
 class HTTPCollector(services.HTTPCollector):
 
@@ -19,8 +24,8 @@ class HTTPCollector(services.HTTPCollector):
             doc['body'] = body
         doc['payload'] = {}
         doc['payload']['type'] = query.get('type')
-        if bypass_id := query.get('bypass_id'):
-            import attacker_config as config
+        bypass_id = query.get('bypass_id')
+        if bypass_id:
             doc['payload']['bypass'] = config.BYPASSES[int(bypass_id)]
         doc['payload']['header'] = query.get('header')
         doc['url'] = request.url
@@ -32,10 +37,10 @@ class HTTPCollector(services.HTTPCollector):
         )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+
     httpd = HTTPCollector()
-    httpd.add_route('/', ['GET'],
-                    '<html><head><title>horrors-log4shell</title></head><body><h1>Welcome</h1><hr></body></html>')
+    httpd.add_route('/', ['GET'], '<html><head><title>horrors-log4shell</title></head><body><h1>Welcome</h1><hr></body></html>')
     httpd.add_route('/collect/', ['GET', 'POST'], httpd.collect)
 
     story = scenarios.Scenario(debug=True)

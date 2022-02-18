@@ -18,7 +18,7 @@ class CompiledJavaPayload(templates.Template):
                 fil.write(template)
             compiler = pathlib.Path(self.config.COMPILER_JAVAC)
             subprocess.run([compiler, tmp_src])
-            print('Compiled ' + str(tmp_bin))
+            logging.debug('Compiled {}'.format(str(tmp_bin)))
             with open(tmp_bin, 'rb') as fil:
                 template = fil.read()
         return template

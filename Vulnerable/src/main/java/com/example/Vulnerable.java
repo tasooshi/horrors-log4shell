@@ -20,7 +20,7 @@ public class Vulnerable {
 
     @GetMapping("/")
     String home() {
-        return "<html><head><title>Vulnerable Application</title></head><body>Welcome!</body></html>";
+        return "<html><head><title>Vulnerable Application</title></head><body><h1>Welcome!</h1><hr>Here's the <a href=\"/endpoint\">endpoint</a></body></html>";
     }
 
     @RequestMapping("/endpoint")

